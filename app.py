@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from PyPDF2 import PdfReader
 
 app = FastAPI(title="PDF to Text API")
@@ -6,8 +6,10 @@ app = FastAPI(title="PDF to Text API")
 @app.post("/pdf-to-text")
 async def pdf_to_text(file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
-        return {"error": "Le fichier doit être un PDF"}
-
+        raise HTTPException(
+            status_code=402,
+            detail={"error": "Le fichier doit être un PDF"}
+        )
     reader = PdfReader(file.file)
     text = ""
 
