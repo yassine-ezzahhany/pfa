@@ -1,5 +1,21 @@
-from repositories.register_repositorie import is_email_exist, insert_user
-def add_user(name : str, email : str, password : str) -> bool:
-    if(is_email_exist(email)):
-        return False
-    return insert_user(name, email, password)
+from services.inputs_validator_service import validate_name_service, validate_password_service
+from services.password_hasher_service import hash_password_service
+from repositorys.register_repository import is_email_exist_repository, add_user_repository
+def add_user_service(name : str, email : str, password : str) -> bool:
+    #verifier le nom :
+    if(validate_name_service(name) == False):
+        raise ValueError("Nom invalid")
+    #verifier le mot de passe :
+    if(validate_password_service(password) == False):
+        raise ValueError("Le mot de passe ne respecte pas les règles de sécurité")
+    #verifier l'unicite d'email :
+    if(is_email_exist_repository(email)):
+        raise ValueError("Email deja existe")
+    #hasher le mot de passe :
+    try:
+        password = hash_password_service(password)
+    except Exception as e:
+        print("erreur hashage de mot de passe", str(e))
+    #verifier la persistence :
+    if not add_user_repository(name, email, password):
+        raise ValueError("Erreur lors de l'insertion dans la base de donnees")

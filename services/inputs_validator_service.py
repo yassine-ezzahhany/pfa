@@ -1,11 +1,11 @@
 import re
 
-def validate_name(name : str) -> bool:
+def validate_name_service(name : str) -> bool:
     if not re.match(r"^[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+$", name):
             return False
     return name.strip().title()
 
-def validate_password(password: str) -> bool:
+def validate_password_service(password: str) -> bool:
     """
     Vérifie si le mot de passe est valide
     """
