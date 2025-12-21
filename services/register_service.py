@@ -15,7 +15,7 @@ def add_user_service(name : str, email : str, password : str) -> bool:
     try:
         password = hash_password_service(password)
     except Exception as e:
-        print("erreur hashage de mot de passe", str(e))
+        raise ValueError("erreur hashage de mot de passe", str(e))
     #verifier la persistence :
     if not add_user_repository(name, email, password):
         raise ValueError("Erreur lors de l'insertion dans la base de donnees")
