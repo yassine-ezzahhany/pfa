@@ -6,10 +6,15 @@ from core.security import verify_token
 
 #Le serveur:
 app=FastAPI(title="PFA APIs")
+origins = [
+    "https://pfa-s1.vercel.app",
+    "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tout le monde peut accéder
-    allow_credentials=True,  # pas de cookies
+    allow_origins=origins,  # Seules ces URLs sont autorisées
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
