@@ -5,19 +5,11 @@ from repositorys.report_repository import save_report, get_user_reports, get_rep
 
 report_router = APIRouter()
 
-@report_router.post("/pdf-to-json")
+@report_router.post("")
 async def pdf_to_json_router(
     file: UploadFile = File(...),
     payload: dict = Depends(verify_token)
 ):
-    """
-    Convertit un fichier PDF en JSON et le sauvegarde
-    
-    - **file**: Le fichier PDF à convertir
-    - **token**: JWT token requis dans le header Authorization
-    
-    Retourne les données extraites du PDF en JSON
-    """
     try:
         # Vérifier que c'est un PDF
         if not file.filename.endswith(".pdf"):
@@ -44,24 +36,18 @@ async def pdf_to_json_router(
                 detail=result.get("error", "Erreur lors de la conversion du PDF")
             )
         
-        # Sauvegarder le rapport en base de données
+        # Sauvegarder le rapport en base de données (sans le texte brut)
         user_id = payload.get("user_id")
         report_id = save_report(
             user_id=user_id,
             filename=file.filename,
-            content=result.get("content"),
-            extracted_data=result.get("metadata")
+            extracted_data=result.get("structured_data"),
+            meta_data=result.get("metadata")
         )
         
         return {
             "success": True,
-            "report_id": report_id,
-            "filename": file.filename,
-            "message": "Fichier PDF converti et enregistré avec succès",
-            "data": {
-                "content": result.get("content"),
-                "metadata": result.get("metadata")
-            }
+            "report_id": report_id
         }
         
     except HTTPException as e:
@@ -77,7 +63,7 @@ async def pdf_to_json_router(
             detail=f"Erreur serveur: {str(e)}"
         )
 
-@report_router.get("/reports")
+@report_router.get("")
 async def get_user_reports_router(payload: dict = Depends(verify_token)):
     """
     Récupère tous les rapports de l'utilisateur authentifié
@@ -103,7 +89,7 @@ async def get_user_reports_router(payload: dict = Depends(verify_token)):
             detail=f"Erreur serveur: {str(e)}"
         )
 
-@report_router.get("/reports/{report_id}")
+@report_router.get("/{report_id}")
 async def get_report_router(
     report_id: str,
     payload: dict = Depends(verify_token)

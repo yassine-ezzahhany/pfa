@@ -2,16 +2,16 @@ from db.connection import db
 from datetime import datetime
 from bson.objectid import ObjectId
 
-def save_report(user_id: str, filename: str, content: str, extracted_data: dict = None):
+def save_report(user_id: str, filename: str, extracted_data: dict = None, meta_data : dict = None):
     """
-    Enregistre un rapport en base de données
+    Enregistre un rapport en base de données (sans stocker le texte brut)
     """
     try:
         result = db.reports.insert_one({
             "user_id": user_id,
             "filename": filename,
-            "content": content,
             "extracted_data": extracted_data,
+            "metadata": meta_data,
             "created_at": datetime.now()
         })
         return str(result.inserted_id)

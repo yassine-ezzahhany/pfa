@@ -8,10 +8,6 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
-# ==========================
-# PASSWORD HASHING
-# ==========================
-
 def hash_password_service(password: str) -> str:
     """
     Hash un mot de passe et retourne une STRING
@@ -21,7 +17,7 @@ def hash_password_service(password: str) -> str:
         password.encode("utf-8"),
         bcrypt.gensalt()
     )
-    return hashed.decode("utf-8")  # bytes -> str
+    return hashed.decode("utf-8")
 
 
 def verify_password_service(password: str, hashed_password) -> bool:
@@ -76,12 +72,7 @@ def decode_access_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
-
-
-# ==========================
 # FASTAPI SECURITY (BEARER)
-# ==========================
-
 security = HTTPBearer()
 
 
