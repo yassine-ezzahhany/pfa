@@ -5,7 +5,7 @@ from services.register_service import add_user_service
 
 register_router = APIRouter()
 @register_router.post("")
-def add_user_router(user_register : UserRegister):
+def add_user_router_handler(user_register : UserRegister):
     try:
         add_user_service(user_register.name, user_register.email, user_register.password)
         return {"message" : "utilisateur ajoute avec succes"}

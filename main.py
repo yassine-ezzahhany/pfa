@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router=register_router, prefix="/register", tags=["Enregistrement"])
+app.include_router(router=register_router, prefix="/register", tags=["Authentification"])
 app.include_router(router=login_router, prefix="/login", tags=["Authentification"])
 app.include_router(router=refresh_router, prefix="/refresh", tags=["Authentification"])
 app.include_router(router=report_router,prefix="/reports",tags=["Rapports Médicaux"],dependencies=[Depends(verify_token)],

@@ -4,12 +4,15 @@ from core.security import (
     create_refresh_token,
     decode_refresh_token,
 )
-from repositorys.auth_repository import find_by_email
+from repositorys.auth_repository import find_user_by_email_repository
 
 def login_user_service(email: str, password: str) -> dict:
-    user = find_by_email(email)
+    user = find_user_by_email_repository(email)
+    stored_password_hash = user.get("password_hash") if user else None
+    if not stored_password_hash and user:
+        stored_password_hash = user.get("mot_de_passe")
     
-    if not user or not verify_password(password, user.get("mot_de_passe")):
+    if not user or not stored_password_hash or not verify_password(password, stored_password_hash):
         raise ValueError("Email ou mot de passe incorrect")
      
     # Créer le token JWT
@@ -26,7 +29,7 @@ def login_user_service(email: str, password: str) -> dict:
         "token_type": "bearer",
         "user": {
             "id": str(user.get("_id")),
-            "name": user.get("nom"),
+            "name": user.get("name") or user.get("nom"),
             "email": user.get("email")
         }
     }

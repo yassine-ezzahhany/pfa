@@ -1,44 +1,53 @@
 # APIs d’Analyse de Rapports Médicaux (FastAPI)
 
-APIs REST pour :
-- authentifier des utilisateurs avec JWT,
-- recevoir un rapport PDF médical,
-- extraire et structurer les données du document,
-- sauvegarder le résultat dans MongoDB,
-- restituer les rapports d’un utilisateur connecté.
+API REST FastAPI pour :
+- gérer l’authentification JWT (register, login, refresh),
+- uploader un fichier PDF,
+- extraire/analyser le contenu via un LLM local,
+- sauvegarder les rapports dans MongoDB,
+- exposer la consultation des rapports d’un utilisateur authentifié.
 
-Le projet suit une architecture simple en couches : `routers` (HTTP), `services` (logique métier), `repositorys` (accès base de données).
+Architecture en couches : `routers` (HTTP), `services` (métier), `repositorys` (accès DB).
 
 ---
 
 ## 1) Fonctionnalités
 
-- **Authentification JWT** : inscription, connexion, token bearer.
-- **Pipeline PDF** :
-  1. validation du format PDF,
-  2. extraction du texte (`PyPDF2`),
-  3. classification “rapport médical ou non” via LLM,
+- **Authentification JWT**
+  - `POST /register`
+  - `POST /login`
+  - `POST /refresh`
+- **Pipeline PDF médical**
+  1. validation du fichier (présence + extension `.pdf`),
+  2. extraction texte avec `PyPDF2`,
+  3. classification du document (médical / non médical) via LLM,
   4. extraction JSON structurée via LLM,
-  5. insertion en base,
-  6. retour de l’identifiant du document.
-- **Sécurité d’accès** : toutes les routes `/reports` nécessitent un token valide.
-- **Isolation des données** : un utilisateur ne peut lire que ses propres rapports.
+  5. sauvegarde en collection `reports` MongoDB.
+- **Accès protégé**
+  - Toutes les routes `/reports` nécessitent un token Bearer valide.
+- **Isolation des données**
+  - Un utilisateur ne peut consulter que ses propres rapports.
 
 ---
 
 ## 2) Stack technique
 
-- **Backend** : FastAPI
+- **Framework API** : FastAPI
+- **Serveur ASGI** : Uvicorn
 - **Base de données** : MongoDB (`pymongo`)
-- **Authentification** : JWT (`python-jose`) + hash mot de passe (`bcrypt`)
+- **Auth/Sécurité** : JWT (`python-jose`) + hash mot de passe (`bcrypt`)
+- **Validation** : Pydantic v2 + `email-validator`
 - **Traitement PDF** : `PyPDF2`
-- **Appel LLM** : HTTP via `requests`
+- **Client HTTP LLM** : `requests`
+- **Chargement env** : `python-dotenv`
 
-> Dans l’implémentation actuelle, le service d’analyse appelle `http://localhost:11434/api/generate` avec le modèle `mistral`.
+Le service d’analyse appelle :
+- endpoint : `http://localhost:11434/api/generate`
+- modèle : `mistral`
 
 ---
 
-## 3) Structure du projet
+## 3) Structure réelle du projet
 
 ```text
 src/
@@ -51,15 +60,15 @@ src/
 │   └── report_repository.py
 ├── routers/
 │   ├── login_router.py
+│   ├── refresh_router.py
 │   ├── register_router.py
 │   └── report_router.py
 ├── schemas/
-│   ├── user_schema.py
-│   └── report_schema.py
+│   └── user_schema.py
 ├── services/
+│   ├── inputs_validator_service.py
 │   ├── login_service.py
 │   ├── register_service.py
-│   ├── inputs_validator_service.py
 │   └── report_service.py
 ├── main.py
 ├── requirements.txt
@@ -70,9 +79,9 @@ src/
 
 ## 4) Prérequis
 
-- Python **3.10+** recommandé
-- MongoDB accessible (local ou distant)
-- Un service LLM local actif sur `localhost:11434` (ex: Ollama avec modèle `mistral`)
+- Python **3.10+**
+- MongoDB accessible
+- Service LLM local actif sur `localhost:11434` (ex: Ollama)
 
 ---
 
@@ -96,15 +105,12 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### Installer et lancer le LLM Mistral (Ollama)
-
-Le backend appelle localement l’endpoint `http://localhost:11434/api/generate` avec le modèle `mistral`.
+### Installer et lancer Ollama (Mistral)
 
 1. Installer Ollama
-
-- Windows: télécharger et installer depuis https://ollama.com/download/windows
-- macOS: `brew install ollama`
-- Linux: `curl -fsSL https://ollama.com/install.sh | sh`
+   - Windows : https://ollama.com/download/windows
+   - macOS : `brew install ollama`
+   - Linux : `curl -fsSL https://ollama.com/install.sh | sh`
 
 2. Démarrer Ollama
 
@@ -112,7 +118,7 @@ Le backend appelle localement l’endpoint `http://localhost:11434/api/generate`
 ollama serve
 ```
 
-3. Télécharger le modèle Mistral
+3. Télécharger le modèle
 
 ```bash
 ollama pull mistral
@@ -130,7 +136,7 @@ ollama run mistral
 
 Créer un fichier `.env` à la racine de `src`.
 
-### Variables obligatoires
+### Variables utilisées par le code
 
 ```env
 APP_NAME=PFA APIs
@@ -145,16 +151,20 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 REFRESH_TOKEN_EXPIRE_DAYS=7
 
-# CORS (séparer les origines par des virgules)
-CORS_ORIGINS=https://pfa-s1.vercel.app,http://localhost:3000,http://127.0.0.1:3000
-
+# CORS (obligatoire dans l'état actuel)
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
+
+### Important
+
+- Dans l’état actuel, `CORS_ORIGINS` doit être défini (sinon erreur au démarrage lors du parsing).
+- `MONGO_URI`, `DATABASE_NAME`, `JWT_SECRET` et `JWT_ALGORITHM` doivent être présents.
 
 ---
 
-## 7) Démarrer le projet
+## 7) Démarrage
 
-### En développement
+### Développement
 
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -164,7 +174,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Swagger : `http://localhost:8000/docs`
 - ReDoc : `http://localhost:8000/redoc`
 
-### En production (exemple Procfile)
+### Production (Procfile)
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port $PORT
@@ -177,7 +187,6 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 ## Authentification
 
 ### `POST /register`
-Crée un utilisateur.
 
 Body JSON :
 
@@ -189,8 +198,15 @@ Body JSON :
 }
 ```
 
+Réponse succès :
+
+```json
+{
+  "message": "utilisateur ajoute avec succes"
+}
+```
+
 ### `POST /login`
-Retourne un token JWT.
 
 Body JSON :
 
@@ -201,7 +217,7 @@ Body JSON :
 }
 ```
 
-Réponse (exemple) :
+Réponse succès :
 
 ```json
 {
@@ -217,7 +233,6 @@ Réponse (exemple) :
 ```
 
 ### `POST /refresh`
-Génère un **nouvel access token** sans reconnexion utilisateur.
 
 Body JSON :
 
@@ -227,7 +242,7 @@ Body JSON :
 }
 ```
 
-Réponse (exemple) :
+Réponse succès :
 
 ```json
 {
@@ -238,16 +253,17 @@ Réponse (exemple) :
 
 ## Rapports médicaux (protégés JWT)
 
-Toutes les routes `/reports` nécessitent :
+En-tête requis :
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
 ### `POST /reports`
-Upload d’un PDF (`multipart/form-data`, champ `file`).
 
-Réponse :
+Upload PDF via `multipart/form-data` (champ `file`).
+
+Réponse succès :
 
 ```json
 {
@@ -257,10 +273,30 @@ Réponse :
 ```
 
 ### `GET /reports`
+
 Retourne les rapports du user connecté.
 
+Réponse succès :
+
+```json
+{
+  "success": true,
+  "reports": []
+}
+```
+
 ### `GET /reports/{report_id}`
-Retourne un rapport précis si l’utilisateur est propriétaire.
+
+Retourne un rapport précis (si propriétaire).
+
+Réponse succès :
+
+```json
+{
+  "success": true,
+  "report": {}
+}
+```
 
 ---
 
@@ -277,39 +313,47 @@ curl -X POST "http://localhost:8000/login" \
   -H "Content-Type: application/json" \
   -d '{"email":"jean@example.com","password":"MotDePasse123!"}'
 
-# 3) Upload PDF (remplacer TOKEN)
+# 3) Refresh
+curl -X POST "http://localhost:8000/refresh" \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"REFRESH_TOKEN"}'
+
+# 4) Upload PDF
 curl -X POST "http://localhost:8000/reports" \
-  -H "Authorization: Bearer TOKEN" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
   -F "file=@rapport.pdf"
 
-# 4) Lister les rapports
+# 5) Lister les rapports
 curl -X GET "http://localhost:8000/reports" \
-  -H "Authorization: Bearer TOKEN"
+  -H "Authorization: Bearer ACCESS_TOKEN"
 ```
 
 ---
 
 ## 10) Codes d’erreur fréquents
 
-- `400` : fichier invalide, contenu non médical, erreur de validation métier.
-- `401` : token manquant/expiré/invalide.
-- `403` : tentative d’accès à un rapport qui n’appartient pas à l’utilisateur.
-- `404` : rapport introuvable.
-- `500` : erreur interne (DB, service externe, etc.).
+- `400` : validation métier (PDF invalide, document non médical, etc.)
+- `401` : authentification/token invalide ou expiré
+- `403` : accès à un rapport non autorisé
+- `404` : rapport introuvable
+- `500` : erreur serveur interne
 
 ---
 
-## 11) Notes de sécurité
+## 11) Limites connues (état actuel)
 
-Pour un déploiement réel :
+- Le service LLM est codé en dur sur `http://localhost:11434/api/generate` avec le modèle `mistral`.
+- L’API dépend de la qualité de réponse du LLM pour la classification/extraction JSON.
+- Les messages d’erreur sont partiellement en français et partiellement en anglais.
+
+---
+
+## 12) Sécurité (recommandations)
+
 - Utiliser une valeur forte pour `JWT_SECRET`.
-- Activer HTTPS.
-- Restreindre CORS à vos domaines frontend.
+- Activer HTTPS en production.
+- Restreindre `CORS_ORIGINS` aux domaines frontend autorisés.
 - Ne jamais versionner `.env`.
-- Ajouter rate limiting + journalisation d’audit.
+- Ajouter rate limiting et audit logs pour un déploiement public.
 
 ---
-
-## 12) License
-
-Projet académique/interne (adapter selon votre contexte).

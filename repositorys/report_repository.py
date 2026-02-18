@@ -2,7 +2,7 @@ from core.connection import db
 from datetime import datetime
 from bson.objectid import ObjectId
 
-def save_report(user_id: str, filename: str, extracted_data: dict = None):
+def save_report_repository(user_id: str, filename: str, extracted_data: dict = None):
     """
     Enregistre un rapport en base de données (sans stocker le texte brut)
     """
@@ -17,7 +17,7 @@ def save_report(user_id: str, filename: str, extracted_data: dict = None):
     except Exception as e:
         raise ValueError(f"Erreur lors de la sauvegarde du rapport: {str(e)}")
 
-def get_user_reports(user_id: str):
+def get_user_reports_repository(user_id: str):
     """
     Récupère tous les rapports d'un utilisateur
     """
@@ -29,7 +29,7 @@ def get_user_reports(user_id: str):
     except Exception as e:
         raise ValueError(f"Erreur lors de la récupération des rapports: {str(e)}")
 
-def get_report_by_id(report_id: str):
+def get_report_by_id_repository(report_id: str):
     """
     Récupère un rapport spécifique par ID
     """

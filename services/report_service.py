@@ -3,9 +3,13 @@ from io import BytesIO
 from typing import BinaryIO
 from fastapi import UploadFile
 from PyPDF2 import PdfReader
-from repositorys.report_repository import (save_report, get_report_by_id as get_report_by_id_repository, get_user_reports as get_user_reports_repository)
+from repositorys.report_repository import (
+    save_report_repository,
+    get_report_by_id_repository,
+    get_user_reports_repository,
+)
 
-def ask_mistral(prompt):
+def request_mistral_service(prompt):
     res = requests.post(
         "http://localhost:11434/api/generate",
         json={
@@ -16,14 +20,14 @@ def ask_mistral(prompt):
     )
     return res.json()["response"]
 
-def validate_pdf_upload(file: UploadFile) -> None:
+def validate_pdf_upload_service(file: UploadFile) -> None:
     if file is None:
         raise ValueError("Le fichier est requis")
 
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise ValueError("Le fichier doit être au format PDF")
 
-async def pdf_to_text(pdf_file: bytes | BinaryIO | UploadFile) -> str:
+async def extract_pdf_text_service(pdf_file: bytes | BinaryIO | UploadFile) -> str:
     if isinstance(pdf_file, bytes):
         content = pdf_file
     elif hasattr(pdf_file, "read"):
@@ -48,7 +52,7 @@ async def pdf_to_text(pdf_file: bytes | BinaryIO | UploadFile) -> str:
 
     return "\n".join(pages_text).strip()
 
-def check_if_medical_report(text: str) -> dict:
+def classify_medical_report_service(text: str) -> dict:
     if not text or not text.strip():
         raise ValueError("Text is required")
 
@@ -60,7 +64,7 @@ def check_if_medical_report(text: str) -> dict:
         f"Input text:\n{text}"
     )
 
-    response = ask_mistral(prompt).strip()
+    response = request_mistral_service(prompt).strip()
 
     try:
         parsed = json.loads(response)
@@ -74,7 +78,7 @@ def check_if_medical_report(text: str) -> dict:
     return {"is_medical_report": is_medical_report}
 
 
-def extract_medical_report_json(text: str) -> dict:
+def extract_medical_report_json_service(text: str) -> dict:
     if not text or not text.strip():
         raise ValueError("Text is required")
 
@@ -104,7 +108,7 @@ IMPORTANT:
 - Valider que le JSON est bien structuré"""
 
     full_prompt = f"{analysis_prompt}\n\nTexte du rapport à analyser:\n{text}"
-    response = ask_mistral(full_prompt).strip()
+    response = request_mistral_service(full_prompt).strip()
 
     try:
         parsed = json.loads(response)
@@ -124,16 +128,16 @@ IMPORTANT:
 
 
 async def process_pdf_report(file: UploadFile, user_id: str) -> dict:
-    validate_pdf_upload(file)
+    validate_pdf_upload_service(file)
 
-    extracted_text = await pdf_to_text(file)
-    classification = check_if_medical_report(extracted_text)
+    extracted_text = await extract_pdf_text_service(file)
+    classification = classify_medical_report_service(extracted_text)
 
     if not classification["is_medical_report"]:
         raise ValueError("Le document fourni n'est pas un rapport médical")
 
-    extracted_json = extract_medical_report_json(extracted_text)
-    document_id = save_report(
+    extracted_json = extract_medical_report_json_service(extracted_text)
+    document_id = save_report_repository(
         user_id=user_id,
         filename=file.filename,
         extracted_data=extracted_json

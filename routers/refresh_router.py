@@ -6,7 +6,7 @@ refresh_router = APIRouter()
 
 
 @refresh_router.post("")
-def refresh_token_router(payload: RefreshTokenRequest):
+def refresh_token_router_handler(payload: RefreshTokenRequest):
     try:
         return refresh_access_token_service(payload.refresh_token)
     except ValueError as e:

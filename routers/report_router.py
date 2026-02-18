@@ -7,7 +7,7 @@ from services.report_service import get_report_by_id_service, process_pdf_report
 report_router = APIRouter()
 
 @report_router.post("")
-async def pdf_to_json(
+async def upload_report_router_handler(
 	file: UploadFile = File(...),
 	payload: dict = Depends(verify_token)
 ):
@@ -31,7 +31,7 @@ async def pdf_to_json(
 
 
 @report_router.get("/{report_id}")
-async def get_report(report_id: str, payload: dict = Depends(verify_token)):
+async def get_report_router_handler(report_id: str, payload: dict = Depends(verify_token)):
 	try:
 		user_id = payload.get("user_id")
 		if not user_id:
@@ -53,7 +53,7 @@ async def get_report(report_id: str, payload: dict = Depends(verify_token)):
 	except Exception as error:
 		raise HTTPException(status_code=500, detail=f"Erreur serveur: {str(error)}")
 @report_router.get("")
-async def get_user_reports(payload: dict = Depends(verify_token)):
+async def get_user_reports_router_handler(payload: dict = Depends(verify_token)):
 	try:
 		user_id = payload.get("user_id")
 		if not user_id:
