@@ -1,398 +1,315 @@
-# API d'Analyse de PDF Médicaux
+# APIs d’Analyse de Rapports Médicaux (FastAPI)
 
-Une API REST basée sur FastAPI pour analyser les documents médicaux en utilisant une inférence LLM locale via Ollama. Extrayez des données médicales structurées à partir de rapports PDF avec authentification JWT.
+APIs REST pour :
+- authentifier des utilisateurs avec JWT,
+- recevoir un rapport PDF médical,
+- extraire et structurer les données du document,
+- sauvegarder le résultat dans MongoDB,
+- restituer les rapports d’un utilisateur connecté.
 
-## Fonctionnalités
+Le projet suit une architecture simple en couches : `routers` (HTTP), `services` (logique métier), `repositorys` (accès base de données).
 
-- 📄 **Analyse PDF**: Extrayez et validez le contenu des rapports médicaux
-- 🤖 **LLM Local**: Utilisez Ollama pour l'inférence sur site (aucun appel API externe)
-- 🔐 **Authentification JWT**: Authentification utilisateur sécurisée basée sur les jetons
-- 📊 **Données Structurées**: Extrayez les informations du patient, diagnostic, symptômes, traitements, examens
-- 💾 **Stockage MongoDB**: Persistez les rapports et les données utilisateur
-- ⚡ **Traitement Asynchrone**: Support async/await de FastAPI pour les opérations non-bloquantes
-- 🔄 **Logique de Retry**: Mécanisme de relance automatique pour les appels LLM
-- 📱 **CORS Activé**: Prêt pour l'intégration frontend
+---
 
-## Stack Technologique
+## 1) Fonctionnalités
 
-- **Framework**: FastAPI
-- **Base de données**: MongoDB
-- **LLM**: Ollama (Local)
-- **Traitement PDF**: PyPDF2
-- **Authentification**: JWT avec bcrypt
-- **Langage**: Python 3.9+
+- **Authentification JWT** : inscription, connexion, token bearer.
+- **Pipeline PDF** :
+  1. validation du format PDF,
+  2. extraction du texte (`PyPDF2`),
+  3. classification “rapport médical ou non” via LLM,
+  4. extraction JSON structurée via LLM,
+  5. insertion en base,
+  6. retour de l’identifiant du document.
+- **Sécurité d’accès** : toutes les routes `/reports` nécessitent un token valide.
+- **Isolation des données** : un utilisateur ne peut lire que ses propres rapports.
 
-## Prérequis
+---
 
-### Logiciels Requis
+## 2) Stack technique
 
-1. **Python 3.9+**
-   ```bash
-   python --version
-   ```
+- **Backend** : FastAPI
+- **Base de données** : MongoDB (`pymongo`)
+- **Authentification** : JWT (`python-jose`) + hash mot de passe (`bcrypt`)
+- **Traitement PDF** : `PyPDF2`
+- **Appel LLM** : HTTP via `requests`
 
-2. **MongoDB** (instance locale ou distante)
-   ```bash
-   # Vérifier la connexion
-   mongosh "mongodb://utilisateur:motdepasse@hote:port/base"
-   ```
+> Dans l’implémentation actuelle, le service d’analyse appelle `http://localhost:11434/api/generate` avec le modèle `mistral`.
 
-3. **Ollama** (pour l'inférence LLM locale)
-   ```bash
-   # Visitez https://ollama.ai pour télécharger et installer
-   # Démarrer le service Ollama
-   ollama serve
-   
-   # Télécharger le modèle recommandé (Mistral)
-   ollama pull mistral
-   # Ou alternatives: neural-chat, llama2, medllama2
-   ```
+---
 
-## Installation
+## 3) Structure du projet
 
-1. **Cloner le dépôt**
-   ```bash
-   git clone <url-du-depot>
-   cd pfa
-   ```
-
-2. **Créer l'environnement virtuel**
-   ```bash
-   python -m venv venv
-   
-   # Activer l'environnement virtuel
-   # Sur Windows:
-   venv\Scripts\activate
-   # Sur macOS/Linux:
-   source venv/bin/activate
-   ```
-
-3. **Installer les dépendances**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Configuration
-
-Créez un fichier `.env` à la racine du projet avec les variables suivantes:
-
-```env
-# Configuration Ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=mistral
-OLLAMA_TIMEOUT=120
-OLLAMA_RETRY_ATTEMPTS=3
-
-# Configuration MongoDB
-MONGODB_URL=mongodb://utilisateur:motdepasse@localhost:27017
-MONGODB_DB_NAME=pfa_db
-
-# Configuration JWT
-JWT_SECRET_KEY=votre-clé-secrète-ici-changez-en-production
-JWT_ALGORITHM=HS256
-JWT_EXPIRATION_MINUTES=30
-
-# Application
-APP_ENV=development
-DEBUG=False
-```
-
-### Référence des Variables d'Environnement
-
-| Variable | Description | Défaut |
-|----------|-------------|---------|
-| `OLLAMA_BASE_URL` | URL de base de l'API Ollama | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Nom du modèle à utiliser (mistral, neural-chat, llama2) | `mistral` |
-| `OLLAMA_TIMEOUT` | Délai d'expiration en secondes | `120` |
-| `OLLAMA_RETRY_ATTEMPTS` | Nombre de tentatives de relance | `3` |
-| `MONGODB_URL` | Chaîne de connexion MongoDB | Requis |
-| `MONGODB_DB_NAME` | Nom de la base de données | `pfa_db` |
-| `JWT_SECRET_KEY` | Clé secrète pour la signature JWT | Requis |
-| `JWT_ALGORITHM` | Algorithme JWT | `HS256` |
-| `JWT_EXPIRATION_MINUTES` | Durée d'expiration du jeton | `30` |
-
-## Exécution de l'Application
-
-### Développement Local
-
-```bash
-# Démarrer Ollama (dans un terminal séparé)
-ollama serve
-
-# Démarrer le serveur FastAPI
-python main.py
-
-# Le serveur s'exécute sur: http://localhost:8000
-# Documentation API: http://localhost:8000/docs
-```
-
-### Déploiement en Production
-
-```bash
-# Utiliser Gunicorn avec Uvicorn
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000
-```
-
-## Points d'Accès API
-
-### Authentification
-
-#### Enregistrement Utilisateur
-**POST** `/register`
-```json
-{
-  "email": "utilisateur@exemple.com",
-  "mot_de_passe": "motdepasse123",
-  "nom": "Nom Utilisateur"
-}
-```
-
-**Réponse (201):**
-```json
-{
-  "message": "Utilisateur enregistré avec succès",
-  "user": {
-    "id": "user_id",
-    "email": "utilisateur@exemple.com",
-    "nom": "Nom Utilisateur"
-  }
-}
-```
-
-#### Connexion Utilisateur
-**POST** `/login`
-```json
-{
-  "email": "utilisateur@exemple.com",
-  "mot_de_passe": "motdepasse123"
-}
-```
-
-**Réponse (200):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "user": {
-    "id": "user_id",
-    "email": "utilisateur@exemple.com",
-    "nom": "Nom Utilisateur"
-  }
-}
-```
-
-### Rapports Médicaux
-
-#### Analyser un Rapport PDF
-**POST** `/reports`
-- **En-têtes**: `Authorization: Bearer <token>`
-- **Corps**: multipart/form-data avec `file` (PDF)
-
-**Réponse (201):**
-```json
-{
-  "success": true,
-  "report_id": "report_id_123"
-}
-```
-
-#### Obtenir les Rapports de l'Utilisateur
-**GET** `/reports`
-- **En-têtes**: `Authorization: Bearer <token>`
-
-**Réponse (200):**
-```json
-[
-  {
-    "_id": "report_id_123",
-    "user_id": "user_id",
-    "filename": "rapport_medical.pdf",
-    "extracted_data": {
-      "patient": "...",
-      "diagnosis": "...",
-      "symptoms": ["...", "..."],
-      "treatments": ["...", "..."],
-      "exams": ["...", "..."],
-      "resume": "..."
-    },
-    "metadata": {...},
-    "created_at": "2024-01-15T10:30:00Z"
-  }
-]
-```
-
-## Structure du Projet
-
-```
-pfa/
+```text
+src/
 ├── core/
-│   ├── __init__.py
-│   └── security.py              # Utilitaires JWT et mot de passe
-├── db/
-│   └── connection.py            # Connexion MongoDB
-├── models/
-│   └── __init__.py
-├── repositories/
-│   ├── __init__.py
-│   ├── register_repository.py   # Opérations DB d'enregistrement
-│   └── report_repository.py     # Opérations DB de rapport
+│   ├── config.py
+│   ├── connection.py
+│   └── security.py
+├── repositorys/
+│   ├── auth_repository.py
+│   └── report_repository.py
 ├── routers/
-│   ├── __init__.py
-│   ├── login_router.py          # Points d'accès authentification
-│   ├── register_router.py       # Point d'accès enregistrement
-│   └── report_router.py         # Points d'accès rapport médical
+│   ├── login_router.py
+│   ├── register_router.py
+│   └── report_router.py
 ├── schemas/
-│   ├── user_schema.py           # Schémas requête/réponse utilisateur
-│   └── report_schema.py         # Schémas requête/réponse rapport
+│   ├── user_schema.py
+│   └── report_schema.py
 ├── services/
-│   ├── __init__.py
-│   ├── login_service.py         # Logique métier authentification
-│   ├── register_service.py      # Logique métier enregistrement
-│   ├── pdf_service.py           # Pipeline traitement PDF
-│   ├── inputs_validator_service.py  # Validation entrée
-│   └── ollama_service.py        # Intégration LLM Ollama
-├── main.py                      # Point d'entrée application FastAPI
-├── requirements.txt             # Dépendances Python
-├── .env                         # Configuration (pas en contrôle de version)
-└── Procfile                     # Configuration déploiement Heroku
+│   ├── login_service.py
+│   ├── register_service.py
+│   ├── inputs_validator_service.py
+│   └── report_service.py
+├── main.py
+├── requirements.txt
+└── Procfile
 ```
 
-## Pipeline de Traitement PDF
+---
 
-1. **Extraction**: PyPDF2 extrait le texte du PDF téléchargé
-2. **Validation**: Ollama confirme que le document est un rapport médical
-3. **Analyse**: Ollama extrait les données médicales structurées:
-   - Informations du patient
-   - Diagnostic
-   - Symptômes
-   - Traitements
-   - Examens médicaux
-   - Résumé du rapport
-4. **Stockage**: Les données structurées sont persistées dans MongoDB
-5. **Retour**: Réponse minimale avec indicateur de succès et ID du rapport
+## 4) Prérequis
 
-## Gestion des Erreurs
+- Python **3.10+** recommandé
+- MongoDB accessible (local ou distant)
+- Un service LLM local actif sur `localhost:11434` (ex: Ollama avec modèle `mistral`)
 
-### Réponses d'Erreur Courantes
+---
 
-| Code | Erreur | Résolution |
-|------|--------|-----------|
-| 400 | Format de fichier invalide | Téléchargez un fichier PDF valide |
-| 401 | Non autorisé | Incluez un jeton JWT valide dans l'en-tête Authorization |
-| 422 | Erreur de validation | Vérifiez le schéma et les types de champs dans la requête |
-| 500 | Ollama indisponible | Assurez-vous qu'Ollama s'exécute: `ollama serve` |
-| 500 | Erreur MongoDB | Vérifiez la chaîne de connexion dans `.env` |
+## 5) Installation
 
-### Détails des Erreurs de Débogage
+Depuis le dossier `src` :
 
-L'API retourne les détails des erreurs au format JSON:
-```json
-{
-  "detail": {
-    "error": "Service Ollama indisponible",
-    "status": 500
-  }
-}
-```
-
-## Dépannage
-
-### Problèmes de Connexion Ollama
-
-**Problème**: "ConnectionError: Service Ollama indisponible"
-
-**Solution**:
 ```bash
-# Vérifier qu'Ollama s'exécute
+python -m venv venv
+```
+
+### Windows (PowerShell)
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+### Installer les dépendances
+
+```bash
+pip install -r requirements.txt
+```
+
+### Installer et lancer le LLM Mistral (Ollama)
+
+Le backend appelle localement l’endpoint `http://localhost:11434/api/generate` avec le modèle `mistral`.
+
+1. Installer Ollama
+
+- Windows: télécharger et installer depuis https://ollama.com/download/windows
+- macOS: `brew install ollama`
+- Linux: `curl -fsSL https://ollama.com/install.sh | sh`
+
+2. Démarrer Ollama
+
+```bash
 ollama serve
+```
 
-# Tester la connexion manuellement
-curl http://localhost:11434/api/tags
+3. Télécharger le modèle Mistral
 
-# Vérifier si le modèle est téléchargé
-ollama list
-
-# Télécharger le modèle si nécessaire
+```bash
 ollama pull mistral
 ```
 
-### Problèmes de Connexion MongoDB
+4. Lancer le modèle
 
-**Problème**: "MongoServerSelectionTimeoutError"
-
-**Solution**:
 ```bash
-# Vérifier que MongoDB s'exécute
-# Tester la chaîne de connexion
-mongosh "mongodb://utilisateur:motdepasse@hote:port/base"
-
-# Mettre à jour MONGODB_URL dans .env avec les bonnes identifiants
+ollama run mistral
 ```
 
-### Problèmes de Jeton JWT
+---
 
-**Problème**: "401 Non autorisé"
+## 6) Configuration (.env)
 
-**Solution**:
-- Incluez l'en-tête `Authorization: Bearer <token>`
-- Le format du jeton doit être: `Authorization: Bearer eyJhbGciOiJIUzI1NiI...`
-- Vérifiez que le jeton n'a pas expiré (défaut: 30 minutes)
+Créer un fichier `.env` à la racine de `src`.
 
-### Problèmes de Délai d'Expiration
+### Variables obligatoires
 
-**Problème**: "Timeout: Ollama a pris trop de temps pour répondre"
-
-**Solution**:
 ```env
-# Augmentez le délai pour les PDF complexes
-OLLAMA_TIMEOUT=180
+APP_NAME=PFA APIs
 
-# Réduisez les tentatives de relance si les relances sont trop lentes
-OLLAMA_RETRY_ATTEMPTS=2
+# MongoDB
+MONGO_URI=mongodb://localhost:27017
+DATABASE_NAME=pfa_db
+
+# JWT
+JWT_SECRET=change-me-in-production
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# CORS (séparer les origines par des virgules)
+CORS_ORIGINS=https://pfa-s1.vercel.app,http://localhost:3000,http://127.0.0.1:3000
+
 ```
 
-## Exemple d'Utilisation
+---
+
+## 7) Démarrer le projet
+
+### En développement
 
 ```bash
-# 1. Enregistrer un utilisateur
-curl -X POST http://localhost:8000/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"utilisateur@exemple.com","mot_de_passe":"motdepasse123","nom":"Jean Dupont"}'
-
-# 2. Se connecter
-curl -X POST http://localhost:8000/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"utilisateur@exemple.com","mot_de_passe":"motdepasse123"}'
-
-# Sauvegarder le access_token de la réponse
-
-# 3. Télécharger un PDF médical
-curl -X POST http://localhost:8000/reports \
-  -H "Authorization: Bearer <access_token>" \
-  -F "file=@rapport_medical.pdf"
-
-# Réponse: {"success": true, "report_id": "..."}
-
-# 4. Récupérer les rapports de l'utilisateur
-curl -X GET http://localhost:8000/reports \
-  -H "Authorization: Bearer <access_token>"
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Considérations de Performance
+- API : `http://localhost:8000`
+- Swagger : `http://localhost:8000/docs`
+- ReDoc : `http://localhost:8000/redoc`
 
-- **Sélection du Modèle**: Mistral est recommandé pour le texte médical (12 Go RAM). Utilisez neural-chat (6 Go) pour les environnements avec ressources limitées
-- **Taille PDF**: Optimal pour les PDF jusqu'à 10 Mo; les fichiers plus volumineux nécessitent un délai d'expiration augmenté
-- **Requêtes Simultanées**: Ollama traite séquentiellement; mettez en file d'attente les requêtes pour l'utilisation en production
-- **Mémoire**: Assurez-vous d'avoir suffisamment de RAM pour le modèle + MongoDB + FastAPI
+### En production (exemple Procfile)
 
-## Notes de Sécurité
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
 
-⚠️ **Liste de Vérification pour la Production**:
-- [ ] Changez `JWT_SECRET_KEY` par une valeur aléatoire forte
-- [ ] Utilisez HTTPS pour tous les points d'accès
-- [ ] Stockez `.env` de manière sécurisée (pas en contrôle de version)
-- [ ] Activez l'authentification MongoDB
-- [ ] Réglez `DEBUG=False` en production
-- [ ] Implémentez une limitation de débit
-- [ ] Utilisez des configurations spécifiques à l'environnement
-- [ ] Activez CORS uniquement pour les domaines de confiance
+---
+
+## 8) Endpoints
+
+## Authentification
+
+### `POST /register`
+Crée un utilisateur.
+
+Body JSON :
+
+```json
+{
+  "name": "Jean Dupont",
+  "email": "jean@example.com",
+  "password": "MotDePasse123!"
+}
+```
+
+### `POST /login`
+Retourne un token JWT.
+
+Body JSON :
+
+```json
+{
+  "email": "jean@example.com",
+  "password": "MotDePasse123!"
+}
+```
+
+Réponse (exemple) :
+
+```json
+{
+  "access_token": "...",
+  "refresh_token": "...",
+  "token_type": "bearer",
+  "user": {
+    "id": "65f...",
+    "name": "Jean Dupont",
+    "email": "jean@example.com"
+  }
+}
+```
+
+### `POST /refresh`
+Génère un **nouvel access token** sans reconnexion utilisateur.
+
+Body JSON :
+
+```json
+{
+  "refresh_token": "..."
+}
+```
+
+Réponse (exemple) :
+
+```json
+{
+  "access_token": "...",
+  "token_type": "bearer"
+}
+```
+
+## Rapports médicaux (protégés JWT)
+
+Toutes les routes `/reports` nécessitent :
+
+```http
+Authorization: Bearer <access_token>
+```
+
+### `POST /reports`
+Upload d’un PDF (`multipart/form-data`, champ `file`).
+
+Réponse :
+
+```json
+{
+  "success": true,
+  "document_id": "65f..."
+}
+```
+
+### `GET /reports`
+Retourne les rapports du user connecté.
+
+### `GET /reports/{report_id}`
+Retourne un rapport précis si l’utilisateur est propriétaire.
+
+---
+
+## 9) Exemple rapide avec curl
+
+```bash
+# 1) Register
+curl -X POST "http://localhost:8000/register" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Jean Dupont","email":"jean@example.com","password":"MotDePasse123!"}'
+
+# 2) Login
+curl -X POST "http://localhost:8000/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"jean@example.com","password":"MotDePasse123!"}'
+
+# 3) Upload PDF (remplacer TOKEN)
+curl -X POST "http://localhost:8000/reports" \
+  -H "Authorization: Bearer TOKEN" \
+  -F "file=@rapport.pdf"
+
+# 4) Lister les rapports
+curl -X GET "http://localhost:8000/reports" \
+  -H "Authorization: Bearer TOKEN"
+```
+
+---
+
+## 10) Codes d’erreur fréquents
+
+- `400` : fichier invalide, contenu non médical, erreur de validation métier.
+- `401` : token manquant/expiré/invalide.
+- `403` : tentative d’accès à un rapport qui n’appartient pas à l’utilisateur.
+- `404` : rapport introuvable.
+- `500` : erreur interne (DB, service externe, etc.).
+
+---
+
+## 11) Notes de sécurité
+
+Pour un déploiement réel :
+- Utiliser une valeur forte pour `JWT_SECRET`.
+- Activer HTTPS.
+- Restreindre CORS à vos domaines frontend.
+- Ne jamais versionner `.env`.
+- Ajouter rate limiting + journalisation d’audit.
+
+---
+
+## 12) License
+
+Projet académique/interne (adapter selon votre contexte).

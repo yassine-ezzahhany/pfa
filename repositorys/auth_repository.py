@@ -1,4 +1,4 @@
-from db.connection import db
+from core.connection import db
 
 def find_by_email(email:str) -> dict:
     return db.users.find_one({"email":email})

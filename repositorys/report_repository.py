@@ -1,8 +1,8 @@
-from db.connection import db
+from core.connection import db
 from datetime import datetime
 from bson.objectid import ObjectId
 
-def save_report(user_id: str, filename: str, extracted_data: dict = None, meta_data : dict = None):
+def save_report(user_id: str, filename: str, extracted_data: dict = None):
     """
     Enregistre un rapport en base de données (sans stocker le texte brut)
     """
@@ -11,7 +11,6 @@ def save_report(user_id: str, filename: str, extracted_data: dict = None, meta_d
             "user_id": user_id,
             "filename": filename,
             "extracted_data": extracted_data,
-            "metadata": meta_data,
             "created_at": datetime.now()
         })
         return str(result.inserted_id)
@@ -41,13 +40,3 @@ def get_report_by_id(report_id: str):
         return report
     except Exception as e:
         raise ValueError(f"Erreur lors de la récupération du rapport: {str(e)}")
-
-def delete_report(report_id: str):
-    """
-    Supprime un rapport
-    """
-    try:
-        result = db.reports.delete_one({"_id": ObjectId(report_id)})
-        return result.deleted_count > 0
-    except Exception as e:
-        raise ValueError(f"Erreur lors de la suppression du rapport: {str(e)}")
